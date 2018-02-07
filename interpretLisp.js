@@ -30,7 +30,7 @@ const parseOperator = function (data) {
 }
 
 const parseIf = function (data) {
-  let test, conseq, alt
+  let test, conseq, alt, result
   if (!data.slice(1).startsWith('if')) {
     return null
   }
@@ -38,10 +38,10 @@ const parseIf = function (data) {
   test = parseSExpression(data)
   data = ((spaceParsedData = parseSpace(test[1])) == null) ? test[1] : spaceParsedData[1]
   conseq = parseSExpression(data)
-  data = ((spaceParsedData = parseSpace(test[1])) == null) ? test[1] : spaceParsedData[1]
+  data = ((spaceParsedData = parseSpace(conseq[1])) == null) ? conseq[1] : spaceParsedData[1]
   alt = parseSExpression(data)
-  return test ? conseq[0] : alt[0]
-  // return ['if',test[0],conseq[0],alt[0]]
+  result = test ? conseq[0] : alt[0]
+  return [result, alt[1]]
 }
 
 const parseDefine = function (data) {
@@ -62,7 +62,7 @@ const parseDefine = function (data) {
   } else {
     obj[variable[0]] = ''
   }
-  return obj
+  return [obj, value[1]]
 }
 
 const parsersFactory = function (...parsers) {
