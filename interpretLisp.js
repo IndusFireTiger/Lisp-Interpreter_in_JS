@@ -1,4 +1,5 @@
 var spaceParsedData
+var globalScope = {}
 
 const parseBool = function (data) {
   if (data.startsWith('#t')) {
@@ -8,11 +9,13 @@ const parseBool = function (data) {
   }
   return null
 }
+
 const parseSpace = function (data) {
   return (((/^(\s)*/).test(data)) ? ([' ', data.replace(/^(\s)*/, '')]) : null)
 }
 
 const parseNumber = function (data) {
+  data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
   var match = data.match(/[+-]?\d*\.?\d+(?:[Ee][+-]?\d+)?/)
   if (match != null && match[0] !== -1) {
     if (match.index !== 0) return null
@@ -23,10 +26,12 @@ const parseNumber = function (data) {
 }
 
 const parseString = function (data) {
-  var match = data.match(/.[a-zA-Z][0-9][^\s]*/)
+  data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
+  var match = data.match(/.[^)\s]*/)
   if (match != null && match[0] !== -1) {
     if (match.index !== 0) return null
     data = data.slice(match[0].length)
+    data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
     return [match[0], data]
   }
 }
@@ -122,9 +127,89 @@ const parseSExpression = function (data) {
   return [result, data.slice(1)]
 }
 
+const findLamdaArgs = function (data) {
+  data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
+  let element
+  let args = []
+  if (data.startsWith('(')) {
+    data = data.slice(1)
+    while (!data.startsWith(')')) {
+      element = parseString(data)
+      if (element !== null) {
+        args.push(element[0])
+        data = element[1]
+      }
+    }
+    data = ((spaceParsedData = parseSpace(data.slice(1))) == null) ? data.slice(1) : spaceParsedData[1]
+  } else {
+    element = parseString(data)
+    args.push(element[0])
+    data = ((spaceParsedData = parseSpace(element[1])) == null) ? element[1] : spaceParsedData[1]
+  }
+  return [args, data]
+}
+
+const findLamdaBody = function (data) {
+  data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
+  let body = ''
+  if (data.startsWith('(')) {
+    let count = 0, k = 0
+    do {
+      if (data[k] === '(') count++
+      if (data[k] === ')') count--
+      k++
+    } while (count !== 0)
+    body = data.substring(0, k)
+    data = ((spaceParsedData = parseSpace(data.slice(k))) == null) ? data.slice(k) : spaceParsedData[1]
+    return [body, data]
+  } else {
+    let temp = parseString(data)
+    body = temp[0]
+    data = temp[1]
+    return [body, data]
+  }
+}
+
+const findLambdaParameters = function (data) {
+  data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
+  let element
+  let args = []
+  while (!data.startsWith(')')) {
+    element = parseNumber(data)
+    if (element !== null) {
+      args.push(element[0])
+      data = element[1]
+    }
+  }
+  data = ((spaceParsedData = parseSpace(data.slice(1))) == null) ? data.slice(1) : spaceParsedData[1]
+  return [args, data]
+}
+
+const parseLambda = function (data) {
+  if (!data.slice(1).startsWith('lambda')) {
+    return null
+  }
+  let lambdaFunction = {}
+  let temp
+  data = data.slice(8)
+  temp = findLamdaArgs(data)
+  lambdaFunction.attributes = temp[0]
+  data = temp[1]
+  temp = findLamdaBody(data)
+  lambdaFunction.body = temp[0]
+  data = temp[1]
+  if (!data.startsWith(')')) {
+    temp = findLambdaParameters(data)
+    lambdaFunction.parameters = temp[0]
+    data = temp[1]
+  }
+  console.log('lambdaFunction', lambdaFunction)
+  return 0
+}
+
 const parseExpression = parsersFactory(parseSExpression, parseNumber, parseBool, parseOperator, parseString)
 
-const parseSplExp = parsersFactory(parseIf, parseDefine)
+const parseSplExp = parsersFactory(parseIf, parseDefine, parseLambda)
 
 const evalFunction = function (envt, args) {
   return envt[args[0]](args.slice(1))
@@ -148,24 +233,26 @@ const interpretLisp = function (input) {
   }
 }
 console.log("===============================================================");
-interpretLisp("(+ 2 3 5)")
-interpretLisp("(- 4 3 1)")
-interpretLisp("(* 2 3 2)")
-interpretLisp("(/ 4 2 2)")
-interpretLisp("(> 4 2)")
-interpretLisp("(< 4 2)")
-interpretLisp("(>= 4 4)")
-interpretLisp("(<= 3 4)")
-interpretLisp("(max 1 2 3 4 5)")
-interpretLisp("(min 1 2 3 4 5)")
-console.log("===============================================================");
-interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))")
-interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))(if (< 10 20) (+ 1 1) (+ 3 3))")
-interpretLisp("(if (< 1 2) (if (> 2 1) (+ 1 2 3 4) (+ 3 3)) (+ 3 3))")
+// interpretLisp("(+ 2 3 5)")
+// interpretLisp("(- 4 3 1)")
+// interpretLisp("(* 2 3 2)")
+// interpretLisp("(/ 4 2 2)")
+// interpretLisp("(> 4 2)")
+// interpretLisp("(< 4 2)")
+// interpretLisp("(>= 4 4)")
+// interpretLisp("(<= 3 4)")
+// interpretLisp("(max 1 2 3 4 5)")
+// interpretLisp("(min 1 2 3 4 5)")
+// console.log("===============================================================");
+// interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))")
+// interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))(if (< 10 20) (+ 1 1) (+ 3 3))")
+// interpretLisp("(if (< 1 2) (if (> 2 1) (+ 1 2 3 4) (+ 3 3)) (+ 3 3))")
 interpretLisp("(if (< 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
-interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
-interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (max 9 4))")
-interpretLisp("(if (<= 1 2) (if (>= 2 1) (min 7 0) (+ 3 3)) (max 9 4))")
-console.log("===============================================================");
-interpretLisp("(define r 3)")
-interpretLisp("(if #f 3 4)")
+// interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
+// interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (max 9 4))")
+// interpretLisp("(if (<= 1 2) (if (>= 2 1) (min 7 0) (+ 3 3)) (max 9 4))")
+// console.log("===============================================================");
+// interpretLisp("(define r 3)")
+// interpretLisp("(if #f 3 4
+interpretLisp("(lambda x x)")
+interpretLisp("(lambda (x y) (+ x y)1 2)")
