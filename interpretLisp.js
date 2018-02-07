@@ -1,5 +1,13 @@
 var spaceParsedData
 
+const parseBool = function (data) {
+  if (data.startsWith('#t')) {
+    return [true, data.slice(2)]
+  } else if (data.startsWith('#f')) {
+    return [false, data.slice(2)]
+  }
+  return null
+}
 const parseSpace = function (data) {
   return (((/^(\s)*/).test(data)) ? ([' ', data.replace(/^(\s)*/, '')]) : null)
 }
@@ -19,7 +27,6 @@ const parseString = function (data) {
   if (match != null && match[0] !== -1) {
     if (match.index !== 0) return null
     data = data.slice(match[0].length)
-    console.log('match in parseString :' + match[0])
     return [match[0], data]
   }
 }
@@ -56,11 +63,11 @@ const parseIf = function (data) {
     return null
   }
   data = ((spaceParsedData = parseSpace(data.slice(3))) == null) ? data.slice(3) : spaceParsedData[1]
-  test = parseSExpression(data)
+  test = parseExpression(data)
   data = ((spaceParsedData = parseSpace(test[1])) == null) ? test[1] : spaceParsedData[1]
-  conseq = parseSExpression(data)
+  conseq = parseExpression(data)
   data = ((spaceParsedData = parseSpace(conseq[1])) == null) ? conseq[1] : spaceParsedData[1]
-  alt = parseSExpression(data)
+  alt = parseExpression(data)
   data = ((spaceParsedData = parseSpace(alt[1])) == null) ? alt[1] : spaceParsedData[1]
   result = test[0] ? conseq[0] : alt[0]
   return [result, data.slice(1)]
@@ -89,7 +96,8 @@ const sExpressionEnvt = {
   '>=': (args) => args[0] >= args[1],
   '<=': (args) => args[0] <= args[1],
   'max': (args) => args.reduce((result, value) => Math.max(result, value)),
-  'min': (args) => args.reduce((result, value) => Math.min(result, value))}
+  'min': (args) => args.reduce((result, value) => Math.min(result, value))
+}
 
 const parseSExpression = function (data) {
   if (!data.startsWith('(')) {
@@ -114,7 +122,7 @@ const parseSExpression = function (data) {
   return [result, data.slice(1)]
 }
 
-const parseExpression = parsersFactory(parseSExpression, parseNumber, parseOperator, parseString)
+const parseExpression = parsersFactory(parseSExpression, parseNumber, parseBool, parseOperator, parseString)
 
 const parseSplExp = parsersFactory(parseIf, parseDefine)
 
@@ -123,6 +131,7 @@ const evalFunction = function (envt, args) {
 }
 
 const interpretLisp = function (input) {
+  console.log(input)
   while (input != null && input.startsWith('(')) {
     let result = parseSplExp(input)
     if (result != null) {
@@ -139,41 +148,24 @@ const interpretLisp = function (input) {
   }
 }
 console.log("===============================================================");
-console.log("(+ 2 3 5)")
 interpretLisp("(+ 2 3 5)")
-console.log("(- 4 3 1)")
 interpretLisp("(- 4 3 1)")
-console.log("(* 2 3 2)")
 interpretLisp("(* 2 3 2)")
-console.log("(/ 4 2 2)")
 interpretLisp("(/ 4 2 2)")
-console.log("(> 4 2)")
 interpretLisp("(> 4 2)")
-console.log("(< 4 2)")
 interpretLisp("(< 4 2)")
-console.log("(>= 4 4)")
 interpretLisp("(>= 4 4)")
-console.log("(<= 3 4)")
 interpretLisp("(<= 3 4)")
-console.log("(max 1 2 3 4 5)")
 interpretLisp("(max 1 2 3 4 5)")
-console.log("(min 1 2 3 4 5)")
 interpretLisp("(min 1 2 3 4 5)")
 console.log("===============================================================");
-console.log("(if (> 10 20) (+ 1 1) (+ 3 3))")
 interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))")
-console.log("(if (> 10 20) (+ 1 1) (+ 3 3)) (if (< 10 20) (+ 1 1) (+ 3 3))")
 interpretLisp("(if (> 10 20) (+ 1 1) (+ 3 3))(if (< 10 20) (+ 1 1) (+ 3 3))")
-console.log("(if (< 1 2) (if (> 2 1) (+ 1 2 3 4) (+ 3 3)) (+ 3 3))")
 interpretLisp("(if (< 1 2) (if (> 2 1) (+ 1 2 3 4) (+ 3 3)) (+ 3 3))")
-console.log("(if (< 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
 interpretLisp("(if (< 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
-console.log("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
 interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))")
-console.log("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (max 4 4))")
 interpretLisp("(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (max 9 4))")
-console.log("(if (<= 1 2) (if (>= 2 1) (min 7 0) (+ 3 3)) (max 4 4))")
 interpretLisp("(if (<= 1 2) (if (>= 2 1) (min 7 0) (+ 3 3)) (max 9 4))")
 console.log("===============================================================");
-console.log("(define r 3)")
 interpretLisp("(define r 3)")
+interpretLisp("(if #f 3 4)")
