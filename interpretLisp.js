@@ -151,16 +151,15 @@ const findLamdaArgs = function (data) {
 
 const findLamdaBody = function (data) {
   data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
-  let body = ''
+  let body = '', brakets = 0, index = 0
   if (data.startsWith('(')) {
-    let count = 0, k = 0
     do {
-      if (data[k] === '(') count++
-      if (data[k] === ')') count--
-      k++
-    } while (count !== 0)
-    body = data.substring(0, k)
-    data = ((spaceParsedData = parseSpace(data.slice(k))) == null) ? data.slice(k) : spaceParsedData[1]
+      if (data[index] === '(') brakets++
+      if (data[index] === ')') brakets--
+      index++
+    } while (brakets !== 0)
+    body = data.substring(0, index)
+    data = ((spaceParsedData = parseSpace(data.slice(index))) == null) ? data.slice(index) : spaceParsedData[1]
     return [body, data]
   } else {
     let temp = parseString(data)
