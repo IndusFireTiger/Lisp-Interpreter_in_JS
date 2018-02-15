@@ -53,7 +53,7 @@ const parseString = function (data) {
 }
 
 const parseOperator = function (data) {
-  var match = data.match(/['=+\-*\/\<\>]+/)
+  var match = data.match(/['=+\-*/<>]+/)
   if (match != null && match[0] !== -1) {
     return [match[0], data.slice(match[0].length)]
   }
