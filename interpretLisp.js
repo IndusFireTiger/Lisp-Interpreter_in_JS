@@ -1,6 +1,11 @@
 var spaceParsedData
 var globalScope = {}
-
+var file = process.argv[2]
+var fs = require('fs')
+fs.readFile(file, 'utf-8', function read (error, InputStr) {
+  if (error) throw error
+  interpretLisp(InputStr)
+})
 const parseBool = function (data) {
   if (data.startsWith('#t')) {
     return [true, data.slice(2)]
@@ -37,8 +42,11 @@ const parseString = function (data) {
 }
 
 const parseOperator = function (data) {
-  var match = data.match(/.[^\s]*/)
-  return [match[0], data.slice(match[0].length)]
+  var match = data.match(/['=+\-*\/\<\>]+/)
+  if (match != null && match[0] !== -1) {
+    return [match[0], data.slice(match[0].length)]
+  }
+  return null
 }
 
 const parseDefine = function (data) {
@@ -56,7 +64,7 @@ const parseDefine = function (data) {
   value = parseLambda(data)
   if (value !== null) {
     globalScope[variable[0]] = value[0]
-    return ['parsed lambda define successfully and added to global scope', value[1].slice(1)]
+    return ['parsed lambda define successfully and added to global scope', value[1].slice(2)]
   }
   // parse a simple a variable
   value = parseExpression(data)
@@ -69,13 +77,10 @@ const parseDefine = function (data) {
 }
 
 const parseIf = function (data) {
-  // console.log('in if parser:'+data.slice(1))
   let test, conseq, alt, result
   if (!data.slice(1).startsWith('if')) {
-    // console.log("if returns null");
     return null
   }
-  // console.log('tries if')
   data = ((spaceParsedData = parseSpace(data.slice(3))) == null) ? data.slice(3) : spaceParsedData[1]
   test = parseExpression(data)
   data = ((spaceParsedData = parseSpace(test[1])) == null) ? test[1] : spaceParsedData[1]
@@ -100,10 +105,10 @@ const parsersFactory = function (...parsers) {
 }
 
 const sExpressionEnvt = {
-  '+': (args) => args.reduce((result, value) => parseFloat(result + value)),
-  '-': (args) => args.reduce((result, value) => parseFloat(result - value)),
-  '*': (args) => args.reduce((result, value) => parseFloat(result * value)),
-  '/': (args) => args.reduce((result, value) => parseFloat(result / value)),
+  '+': (args) => args.reduce((result, value) => result + value),
+  '-': (args) => args.reduce((result, value) => result - value),
+  '*': (args) => args.reduce((result, value) => result * value),
+  '/': (args) => args.reduce((result, value) => result / value),
   '=': (args) => args[0] === args[1],
   '>': (args) => args[0] > args[1],
   '<': (args) => args[0] < args[1],
@@ -111,7 +116,7 @@ const sExpressionEnvt = {
   '<=': (args) => args[0] <= args[1],
   'max': (args) => args.reduce((result, value) => Math.max(result, value)),
   'min': (args) => args.reduce((result, value) => Math.min(result, value)),
-  'print': (args) => args
+  'print': (args) => console.log(args)
 }
 
 const parseSExpression = function (data) {
@@ -174,12 +179,13 @@ const findLamdaBody = function (data) {
     data = ((spaceParsedData = parseSpace(data.slice(index))) == null) ? data.slice(index) : spaceParsedData[1]
     return [body, data]
   }
+  // console.log('   before returning null daat:'+data);
   return null
 }
 
 const findLambdaParameters = function (data) {
   data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
-  let element
+  let element, innerLambda
   let args = []
   while (!data.startsWith(')')) {
     element = parseNumber(data)
@@ -191,12 +197,15 @@ const findLambdaParameters = function (data) {
   return [args, data]
 }
 
-const parseLambda = function (data) {
+const parseLambda = function (data, parent) {
   if (!data.slice(1).startsWith('lambda') && !data.slice(2).startsWith('lambda')) {
     return null
   }
   let lambdaFunction = {}
-  let temp
+  let temp, result
+  if(parent !== null){
+    lambdaFunction.parentEnvt = parent
+  }
   data = data.slice(8)
   temp = findLamdaArgs(data)
   lambdaFunction.attributes = temp[0]
@@ -204,14 +213,44 @@ const parseLambda = function (data) {
   temp = findLamdaBody(data)
   lambdaFunction.body = temp[0]
   data = temp[1]
-  if (data.startsWith(')')) {
-    return [lambdaFunction, data.slice(1)]
-  }
   temp = findLambdaParameters(data)
   lambdaFunction.parameters = temp[0]
   data = temp[1]
-  console.log('   need to evaluate with parameters =' + lambdaFunction.parameters)
-  let result = evaluateProcedure(lambdaFunction, lambdaFunction.parameters)
+  if (lambdaFunction.parameters.length > 0) {
+    // console.log('   need to evaluate with parameters =' + lambdaFunction.parameters)
+    let lambdaEnvt = {}
+    let i = 0
+    lambdaFunction.attributes.forEach((item) => {
+      if (lambdaFunction.parameters[i] !== undefined) {
+        lambdaEnvt[item] = lambdaFunction.parameters[i]
+      }
+      i++
+    })
+    lambdaFunction.LocalEnvt = lambdaEnvt
+    // console.log('   lambdaFunction:', lambdaFunction, '\n')
+  }
+  // console.log('   has lambda: '+(lambdaFunction.body.search(/lambda/)>-1))
+  if ((lambdaFunction.body.search(/lambda/)>-1)) {
+    // console.log('   sending parent attributes: '+ lambdaFunction.attributes);
+    innerLambda = parseLambda(lambdaFunction.body, lambdaFunction)
+    return [innerLambda, data.slice(1)]
+  }else {
+    // console.log('   lambdaFunction.parameters:'+lambdaFunction.parameters)
+    if(lambdaFunction.parameters !== null && lambdaFunction.parameters.length > 0){
+      result = evaluateProcedure(lambdaFunction, lambdaFunction.parameters)
+      // console.log('   returning/a :'+ [result, data.slice(1)]);
+      return [result, data.slice(1)]
+    } else if((lambdaFunction.parentEnvt !== null && lambdaFunction.parentEnvt !== undefined) && lambdaFunction.parentEnvt.parameters.length > 0){
+      result = evaluateProcedure(lambdaFunction, [])
+      return [result, data.slice(1)]
+    }else {
+      // console.log('   returning/b :'+ [lambdaFunction.body, data.slice(1)]);
+      return [lambdaFunction, data]
+    }
+  }
+  if (lambdaFunction.hasOwnProperty('parentEnvt') && lambdaFunction.parentEnvt !== undefined){
+    return lambdaFunction
+  }
   return [result, data.slice(1)]
 }
 
@@ -220,41 +259,105 @@ const parseExpression = parsersFactory(parseSExpression, parseNumber, parseBool,
 const parseSplExp = parsersFactory(parseIf, parseDefine, parseLambda)
 
 const evaluateFunction = function (envt, args) {
+  // console.log('   evaluating/ : '+args);
+
   if (envt.hasOwnProperty([args[0]])) {
     return envt[args[0]](args.slice(1))
-  } else if (globalScope.hasOwnProperty([args[0]])) {
+  }
+  if (globalScope.hasOwnProperty([args[0]])) {
+    // console.log('   globalScope[args[0]]/ : ' + globalScope[args[0]]);
+
     return evaluateProcedure(globalScope[args[0]], args.slice(1))
   }
 }
 
+const getValue = function ( lambdaObj, attri) {
+  // console.log('   searching attri: '+attri);
+  let level = 0
+  let found = false
+  while (lambdaObj !== undefined) {
+    if (lambdaObj.LocalEnvt !== undefined && lambdaObj.LocalEnvt.hasOwnProperty(attri)) {
+      // console.log('   found value in the level : ' + level)
+      // console.log('   value: ' + lambdaObj.LocalEnvt[attri])
+      return lambdaObj.LocalEnvt[attri]
+    }
+    lambdaObj = lambdaObj.parentEnvt
+    level++
+  }
+
+  if (globalScope.hasOwnProperty(attri)) {
+    // console.log('   found value in globalScope');
+    //   console.log('   typeof globalScope[attri]: == object'+(typeof globalScope[attri]==='object'));
+    if((typeof globalScope[attri]==='object') && !globalScope[attri].body.startsWith('(')){
+      return globalScope[attri]
+    } else if (!(typeof globalScope[attri]==='object')) {
+      return globalScope[attri]
+    }else {
+      // console.log('   its a function')
+      return null
+    }
+  } else {
+    // console.log('   value NOT FOUND')
+    return null
+  }
+}
+const findVariables = function (body){
+  let reg = /[a-zA-Z]+/
+  let vars = []
+  let match
+  do{
+    match = body.match(reg)
+    if(match !== null){
+      vars.push(match[0])
+      body = body.slice(body.indexOf(match)+match[0].length)
+    }
+  } while (match !== null)
+
+  // console.log('  all vars : '+vars)
+  return vars
+}
 const evaluateProcedure = function (lambdaObject, parameters) {
-  let lambdaEnvt = {}
-  let i = 0
-  lambdaObject.attributes.forEach((item) => {
-    if (parameters[i] !== undefined) {
-      lambdaEnvt[item] = parameters[i]
-    }
-    i++
-  })
+  // console.log('   in evaluateProcedure:' + lambdaObject.body)
+  // console.log('   in lambdaObject.attributes:' + lambdaObject.attributes)
+  // console.log('   in lambdaObject.LocalEnvt:' + lambdaObject.LocalEnvt)
+  // console.log('   passed params:'+parameters);
+  let VolatileEnvt = {}
+  if (lambdaObject.LocalEnvt === undefined && parameters.length > 0) {
+    let i = 0
+    lambdaObject.attributes.forEach((item) => {
+      if (parameters[i] !== undefined) {
+        VolatileEnvt[item] = parameters[i]
+      }
+      i++
+    })
+  }
   let lambdaBody = lambdaObject.body
-  i = 0
-  for (let prop of lambdaObject.attributes) {
-    var reg = new RegExp(prop, 'g')
-    if (lambdaEnvt.hasOwnProperty(prop)){
-      console.log('   LambdaScope - '+prop+' = ', lambdaEnvt[prop]);
-      lambdaBody = lambdaBody.replace(reg, lambdaEnvt[prop])
+  let i = 0
+  let substitutions = 0, value
+  let vars = findVariables(lambdaBody)
+  // console.log(' for vars:'+vars);
+  for (let prop in vars) {
+    // console.log(' prop: '+vars[prop]);
+    var reg = new RegExp(vars[prop], 'g')
+    if (VolatileEnvt.hasOwnProperty(vars[prop])) {
+      value = VolatileEnvt[vars[prop]]
+    } else {
+      value = getValue(lambdaObject, vars[prop])
     }
-    else if (globalScope.hasOwnProperty(prop)){
-      console.log('   GlobalScope - '+prop+' = ', globalScope[prop])
-      lambdaBody = lambdaBody.replace(reg, globalScope[prop])
+    if(value !== null){
+      lambdaBody = lambdaBody.replace(reg, value)
     }
-    i++
   }
   console.log('   lambdaBody after substitution', lambdaBody);
   let result = parseSplExp(lambdaBody)
-  console.log('   result of parseSplExp', result);
+  // console.log('   result of parseSplExp', result);
   if (result == null) {
+    // console.log('   trying parseExpression with exp:' + lambdaBody);
     result = parseExpression(lambdaBody)
+  }
+  // console.log('   result of parseExpression', result);
+  if (result == null || result[0] == null) {
+    return null
   }
   return result
 }
@@ -262,47 +365,27 @@ const evaluateProcedure = function (lambdaObject, parameters) {
 const interpretLisp = function (input) {
   console.log('================================================================================\n')
   console.log('INPUT STRING:' + input + '\n')
+  let count = 1
   while (input != null && input.startsWith('(')) {
+    console.log(count)
+    console.log(input);
+    count++
     let result = parseSplExp(input)
     if (result != null) {
       console.log('\n RESULT:', result[0])
       input = ((spaceParsedData = parseSpace(result[1])) == null) ? result[1] : spaceParsedData[1]
+
+      console.log(input[0])
       continue
     }
     result = parseExpression(input)
     if (result != null) {
       console.log('\n RESULT:', result[0])
       input = ((spaceParsedData = parseSpace(result[1])) == null) ? result[1] : spaceParsedData[1]
+
+      console.log(input[0])
       continue
     }
     console.log('NOT VALID')
   }
 }
-// S Expressions
-// interpretLisp('(+ 2 3 5)')
-// interpretLisp('(- 4 3 1)')
-// interpretLisp('(* 2 3 2)')
-// interpretLisp('(/ 4 2 2)')
-// interpretLisp('(> 4 2)')
-// interpretLisp('(< 4 2)')
-// interpretLisp('(>= 4 4)')
-// interpretLisp('(<= 3 4)')
-// interpretLisp('(max 1 2 3 4 5)')
-// interpretLisp('(min 1 2 3 4 5)')
-// Special Expressions
-// interpretLisp('(if (> 10 20) (+ 1 1) (+ 3 3))')
-// interpretLisp('(if (> 10 20) (+ 1 1) (+ 3 3)) (if (< 10 20) (+ 1 1) (+ 3 3))')
-// interpretLisp('(if (< 1 2) (if (> 2 1) (+ 1 2 3 4) (+ 3 3)) (+ 3 3))')
-// interpretLisp('(if (< 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))')
-// interpretLisp('(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (+ 4 4))')
-// interpretLisp('(if (> 1 2) (if (< 2 1) (+ 1 1) (+ 3 3)) (max 9 4))')
-// interpretLisp('(if (<= 1 2) (if (>= 2 1) (min 7 0) (+ 3 3)) (max 9 4))')
-interpretLisp('(define y 3)')
-interpretLisp('(define l 5)')
-interpretLisp('(define add (lambda x (+ x x))) (define k 0)')
-// interpretLisp('(define sub (lambda (x y) (+ x y)1 2))')
-interpretLisp('(lambda (x y) (+ x y)1)')
-interpretLisp('(lambda (a b) (if(< a b) (+ a a) (+ b b))10 20)')
-interpretLisp('(lambda (n m) (if(> n m) (add n) (add m))12 14)')
-interpretLisp('(lambda (i k) (lambda (i) (+ i k y))1 2)')
-// interpretLisp('(print 4 5)')
