@@ -286,15 +286,12 @@ const evaluateFunction = function (envt, args) {
   }
 }
 
-const getValue = function ( lambdaObj, attri) {
-  let level = 0
-  let found = false
+const getValue = function (lambdaObj, attri) {
   while (lambdaObj !== undefined) {
     if (lambdaObj.LocalEnvt !== undefined && lambdaObj.LocalEnvt.hasOwnProperty(attri)) {
       return lambdaObj.LocalEnvt[attri]
     }
     lambdaObj = lambdaObj.parentEnvt
-    level++
   }
 
   if (globalScope.hasOwnProperty(attri)) {
