@@ -17,7 +17,7 @@
 (define l 5)
 (define z 1)
 (define add (lambda x (+ x x)))
-(lambda (x y) (+ x y) 1)
+(lambda (x) (+ x y) 1)
 (lambda (a b) (if(< a b) (+ a a) (+ b b)) 10 20)
 (lambda (n m) (if(< n m) (add n) (add m)) 12 14)
 (lambda (i k) (lambda (i) (+ i k y) 15) 1 3)
