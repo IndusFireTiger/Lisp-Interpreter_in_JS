@@ -1,0 +1,6 @@
+(define fact (lambda (n) (if (<= n 1) (1) (* n (fact (- n 1))))))
+(fact 10)
+(define circlearea (lambda (r) (* 3.14159 (* r r))))
+(circlearea 3)
+(define twice (lambda (x) (* 2 x)))
+(twice 5)
