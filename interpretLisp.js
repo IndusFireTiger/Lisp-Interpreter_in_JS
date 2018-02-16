@@ -75,7 +75,7 @@ const parseDefine = function (data) {
   value = parseLambda(data)
   if (value !== null) {
     globalScope[variable[0]] = value[0]
-    return ['parsed lambda define successfully and added to global scope', value[1].slice(2)]
+    return ['define successfully and added to global scope', value[1].slice(2)]
   }
   // parse a simple variable
   value = parseExpression(data)
@@ -121,12 +121,8 @@ const sExpressionEnvt = {
   '*': (args) => args.reduce((result, value) => result * value),
   '/': (args) => args.reduce((result, value) => result / value),
   '=': (args) => args.reduce((result, value) => result === value),
-  '>': args => args.reduce((a, b) => {
-    return a > b
-  }),
-  '<': (args) => args.reduce((a, b) => {
-    return a < b
-  }),
+  '>': args => args.reduce((a, b) => a > b),
+  '<': (args) => args.reduce((a, b) => a < b),
   '>=': (args) => args.reduce((result, value) => result >= value),
   '<=': (args) => args.reduce((result, value) => result <= value),
   'max': (args) => args.reduce((result, value) => Math.max(result, value)),
@@ -247,6 +243,9 @@ const parseLambda = function (data, parent) {
   if (lambdaFunction.parameters.length > 0) {
     let lambdaEnvt = {}
     let i = 0
+    if (lambdaFunction.attributes.length !== lambdaFunction.parameters.length) {
+      throw new Error('insufficient arguments')
+    }
     lambdaFunction.attributes.forEach((item) => {
       if (lambdaFunction.parameters[i] !== undefined) {
         lambdaEnvt[item] = lambdaFunction.parameters[i]
@@ -257,7 +256,7 @@ const parseLambda = function (data, parent) {
   }
   if ((lambdaFunction.body.search(/lambda/) > -1)) {
     let innerLambda = parseLambda(lambdaFunction.body, lambdaFunction)
-    return [innerLambda, data.slice(1)]
+    return [innerLambda[0], data.slice(1)]
   } else {
     if (lambdaFunction.parameters !== null && lambdaFunction.parameters.length > 0) {
       result = evaluateProcedure(lambdaFunction, lambdaFunction.parameters)
@@ -352,7 +351,7 @@ const evaluateProcedure = function (lambdaObject, parameters) {
   if (result == null || result[0] == null) {
     return null
   }
-  return result
+  return result[0]
 }
 
 const interpretLispExp = function (input) {
