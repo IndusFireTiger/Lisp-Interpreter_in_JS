@@ -43,7 +43,7 @@ const parseNumber = function (data) {
 
 const parseString = function (data) {
   data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
-  var match = data.match(/.[^)\s]*/)
+  var match = data.match(/.[^)\s*+-/]*/)
   if (match != null && match[0] !== -1) {
     if (match.index !== 0) return null
     data = data.slice(match[0].length)
@@ -53,7 +53,7 @@ const parseString = function (data) {
 }
 
 const parseOperator = function (data) {
-  var match = data.match(/['=+\-*/<>]+/)
+  var match = data.match(/['=+\-*/<>a-zA-Z]*/)
   if (match != null && match[0] !== -1) {
     return [match[0], data.slice(match[0].length)]
   }
@@ -75,7 +75,7 @@ const parseDefine = function (data) {
   value = parseLambda(data)
   if (value !== null) {
     globalScope[variable[0]] = value[0]
-    return ['define successfully and added to global scope', value[1].slice(2)]
+    return [variable[0] + ' lambda defined', value[1].slice(2)]
   }
   // parse a simple variable
   value = parseExpression(data)
@@ -88,19 +88,21 @@ const parseDefine = function (data) {
 }
 
 const parseIf = function (data) {
-  let test, conseq, alt, result
+  let test, conseq, alt
   if (!data.slice(1).startsWith('if')) {
     return null
   }
   data = ((spaceParsedData = parseSpace(data.slice(3))) == null) ? data.slice(3) : spaceParsedData[1]
   test = parseExpression(data)
-  data = ((spaceParsedData = parseSpace(test[1])) == null) ? test[1] : spaceParsedData[1]
-  conseq = parseExpression(data)
-  data = ((spaceParsedData = parseSpace(conseq[1])) == null) ? conseq[1] : spaceParsedData[1]
-  alt = parseExpression(data)
-  data = ((spaceParsedData = parseSpace(alt[1])) == null) ? alt[1] : spaceParsedData[1]
-  result = test[0] ? conseq[0] : alt[0]
-  return [result, data.slice(1)]
+  let conseqBody = findBody(test[1])
+  let altBody = findBody(conseqBody[1])
+  if (test[0] === true) {
+    conseq = parseExpression(conseqBody[0])
+    return [conseq[0], altBody[1]]
+  } else {
+    alt = parseExpression(altBody[0])
+    return [alt[0], altBody[1]]
+  }
 }
 
 const parsersFactory = function (...parsers) {
@@ -189,7 +191,7 @@ const findLamdaArgs = function (data) {
   return [args, data]
 }
 
-const findLamdaBody = function (data) {
+const findBody = function (data) {
   data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
   let body = ''
   let brakets = 0
@@ -234,7 +236,7 @@ const parseLambda = function (data, parent) {
   temp = findLamdaArgs(data)
   lambdaFunction.attributes = temp[0]
   data = temp[1]
-  temp = findLamdaBody(data)
+  temp = findBody(data)
   lambdaFunction.body = temp[0]
   data = temp[1]
   temp = findLambdaParameters(data)
@@ -282,6 +284,9 @@ const evaluateFunction = function (envt, args) {
   }
   if (globalScope.hasOwnProperty([args[0]])) {
     return evaluateProcedure(globalScope[args[0]], args.slice(1))
+  }
+  if (args.length === 1 && !isNaN((args[0]))) {
+    return args[0]
   }
 }
 
