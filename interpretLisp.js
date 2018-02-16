@@ -1,11 +1,20 @@
 var spaceParsedData
 var globalScope = {}
 
+const LispSyntaxException = function (message) {
+  this.message = message
+  this.name = 'Custom Error'
+}
+
+LispSyntaxException.prototype.toString = function () {
+  return this.name + ': ' + this.message + '\n'
+}
+
 const parseBool = function (data) {
   data = ((spaceParsedData = parseSpace(data)) == null) ? data : spaceParsedData[1]
   if (data.startsWith('(')) {
     if (data.slice(1).startsWith('#')) {
-      throw new Error('#t is not a function')
+      throw new LispSyntaxException('#t is not a function')
     }
   }
   if (data.startsWith('#t')) {
@@ -88,14 +97,24 @@ const parseDefine = function (data) {
 }
 
 const parseIf = function (data) {
-  let test, conseq, alt
+  let test, conseqBody, conseq, altBody, alt
+  let err = 'incomplete if expression'
   if (!data.slice(1).startsWith('if')) {
     return null
   }
   data = ((spaceParsedData = parseSpace(data.slice(3))) == null) ? data.slice(3) : spaceParsedData[1]
   test = parseExpression(data)
-  let conseqBody = findBody(test[1])
-  let altBody = findBody(conseqBody[1])
+  if (test === null) {
+    throw new LispSyntaxException(err)
+  }
+  conseqBody = findBody(test[1])
+  if (conseqBody === null) {
+    throw new LispSyntaxException(err)
+  }
+  altBody = findBody(conseqBody[1])
+  if (altBody === null) {
+    throw new LispSyntaxException(err)
+  }
   if (test[0] === true) {
     conseq = parseExpression(conseqBody[0])
     return [conseq[0], altBody[1]]
@@ -123,8 +142,8 @@ const sExpressionEnvt = {
   '*': (args) => args.reduce((result, value) => result * value),
   '/': (args) => args.reduce((result, value) => result / value),
   '=': (args) => args.reduce((result, value) => result === value),
-  '>': args => args.reduce((a, b) => a > b),
-  '<': (args) => args.reduce((a, b) => a < b),
+  '>': args => args.reduce((result, value) => result > value),
+  '<': (args) => args.reduce((result, value) => result < value),
   '>=': (args) => args.reduce((result, value) => result >= value),
   '<=': (args) => args.reduce((result, value) => result <= value),
   'max': (args) => args.reduce((result, value) => Math.max(result, value)),
@@ -138,7 +157,7 @@ const sExpressionEnvt = {
         if (!isNaN(elem)) { // is a number then append
           out += elem
         } else {
-          // throw error
+          throw new LispSyntaxException('unbound symbol: ' + elem)
         }
       }
     })
@@ -159,7 +178,7 @@ const parseSExpression = function (data) {
   while (!data.startsWith(')')) {
     var element = parseExpression(data)
     if (element == null) {
-      throw new Error('enough arguments not found')
+      throw new LispSyntaxException('enough arguments not found')
     } else {
       args.push(element[0])
     }
@@ -246,7 +265,7 @@ const parseLambda = function (data, parent) {
     let lambdaEnvt = {}
     let i = 0
     if (lambdaFunction.attributes.length !== lambdaFunction.parameters.length) {
-      throw new Error('insufficient arguments')
+      throw new LispSyntaxException('insufficient arguments')
     }
     lambdaFunction.attributes.forEach((item) => {
       if (lambdaFunction.parameters[i] !== undefined) {
@@ -326,6 +345,7 @@ const findVariables = function (body) {
 
 const evaluateProcedure = function (lambdaObject, parameters) {
   let VolatileEnvt = {}
+  let value, lambdaBody, vars, result
   if (lambdaObject.LocalEnvt === undefined && parameters.length > 0) {
     let i = 0
     lambdaObject.attributes.forEach((item) => {
@@ -335,9 +355,8 @@ const evaluateProcedure = function (lambdaObject, parameters) {
       i++
     })
   }
-  let lambdaBody = lambdaObject.body
-  let vars = findVariables(lambdaBody)
-  let value
+  lambdaBody = lambdaObject.body
+  vars = findVariables(lambdaBody)
   for (let prop in vars) {
     var reg = new RegExp(vars[prop], 'g')
     if (VolatileEnvt.hasOwnProperty(vars[prop])) {
@@ -349,7 +368,7 @@ const evaluateProcedure = function (lambdaObject, parameters) {
       lambdaBody = lambdaBody.replace(reg, value)
     }
   }
-  let result = parseSplExp(lambdaBody)
+  result = parseSplExp(lambdaBody)
   if (result == null) {
     result = parseExpression(lambdaBody)
   }
@@ -359,7 +378,12 @@ const evaluateProcedure = function (lambdaObject, parameters) {
   return result[0]
 }
 
-const interpretLispExp = function (input) {
+const parseProcedure = function (input) {
+  let open = input.match(/[(]/g)
+  let close = input.match(/[)]/g)
+  if (!(open === null || close === null) && open.length !== close.length) {
+    throw new LispSyntaxException('unbalanced brackets')
+  }
   while (input != null && input.startsWith('(')) {
     let result = parseSplExp(input)
     if (result != null) {
@@ -376,4 +400,16 @@ const interpretLispExp = function (input) {
   }
 }
 
-exports.lispy = interpretLispExp
+const interpretLisp = function (input) {
+  try {
+    parseProcedure(input)
+  } catch (e) {
+    if (e instanceof LispSyntaxException) {
+      console.log(e.toString())
+    } else {
+      throw e
+    }
+  }
+}
+
+exports.lispy = interpretLisp
